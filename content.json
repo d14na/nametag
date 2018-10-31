@@ -1,0 +1,76 @@
+{
+ "address": "1NAMETAGa1cYwE8QsAFz4oqNt1KKGA2SFC",
+ "address_index": 5648719,
+ "clone_root": "",
+ "cloneable": true,
+ "description": "The \"official\" certificate authority of the Zer0net.",
+ "favicon": "images/favicon.png",
+ "files": {
+  "LICENSE": {
+   "sha512": "298a09da0c4e5be3b3436cfeff855ee96585e316411e0ba7afbf893dba02b843",
+   "size": 1077
+  },
+  "README.md": {
+   "sha512": "c60d01afdc838cbc8cf1ca20dda7b0718e46cbc4e2e793a9102619e2113bd27f",
+   "size": 10
+  },
+  "css/main.css": {
+   "sha512": "f1038402988afbba2740477b9a6de81fc44d96c81794cd59ae2c8acbcc58a05a",
+   "size": 1144
+  },
+  "data-default/data.json": {
+   "sha512": "19f080f96f4d51f8e047055d977a7659974011d1353ba0214cc6ea3ab080f3d3",
+   "size": 126
+  },
+  "data-default/users/content-default.json": {
+   "sha512": "0f23391384952142eb7f33e4bfd91efbfa41d4baf51498e31a04d52053d3c0f2",
+   "size": 464
+  },
+  "dbschema.json": {
+   "sha512": "51d6245cd3150b7f9b3f27675d290a3759eccdb70ecd65df9494f662889bf938",
+   "size": 630
+  },
+  "images/favicon.png": {
+   "sha512": "5ba580f12d138968edbddc90828775038f2060ecf7048d3e1f5a92845c0df598",
+   "size": 908
+  },
+  "images/icon.png": {
+   "sha512": "74be97f97716e25f61398471586d20f9b7d1a6a558dcac7d4cc67206f9652b00",
+   "size": 14672
+  },
+  "index.html": {
+   "sha512": "e0c142e6a4b1c46f2f70fcb0a0afebb9aaf84a1af9e489ceb0c2e6a02f477c46",
+   "size": 5826
+  },
+  "js/main.js": {
+   "sha512": "99856866fabd1f925e73466c25418600b42f96417e107e6c7eb78f9915d77848",
+   "size": 4186
+  },
+  "libs/crypto-js.js": {
+   "sha512": "13d7bb9a826516dafb68fd6d2ac7d276effdde834f74e4f2814318d783d41ad1",
+   "size": 613309
+  },
+  "package.json": {
+   "sha512": "38d9c384bf1ef28ef4d1f8720e94878547697bbb1b3f8f8b189095153b5b5d5e",
+   "size": 277
+  }
+ },
+ "ignore": "(\\.git|data/.*)",
+ "includes": {
+  "data/users/content.json": {
+   "signers": [],
+   "signers_required": 1
+  }
+ },
+ "inner_path": "content.json",
+ "modified": 1540921193,
+ "optional": "",
+ "postmessage_nonce_security": true,
+ "signers_sign": "HLJ+wOu0HOarjEHEcOtT9/H7yv/3he3kd3COySyL1VXDIMGwDa3xK2KPP2G2apIPl2SoOBSVbuQ1ULsKP41HLP8=",
+ "signs": {
+  "1NAMETAGa1cYwE8QsAFz4oqNt1KKGA2SFC": "Gy4W0TiRtq7uHBj3S9J3qZ40R9Zve2WlJ5y8Kc0HzDmQcrXgiaRgn4G6cBMLqmlIdyraEw26/XTMGTLf7N71dRk="
+ },
+ "signs_required": 1,
+ "title": "Nametag",
+ "zeronet_version": "0.6.3"
+}
