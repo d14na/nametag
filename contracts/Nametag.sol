@@ -204,6 +204,7 @@ contract Nametag is Owned {
     );
 
     event Respect(
+        address indexed owner,
         address indexed peer,
         uint respect
     );
@@ -253,6 +254,28 @@ contract Nametag is Owned {
     }
 
     /**
+     * @dev Only allow access to "registered" nametag owner.
+     */
+    modifier onlyNametagOwner(
+        bytes32 _nametagId
+    ) {
+        /* Calculate owner hash. */
+        bytes32 ownerHash = keccak256(abi.encodePacked(
+            _namespace, '.',
+            _nametagId,
+            '.owner'
+        ));
+
+        /* Retrieve nametag owner. */
+        address nametagOwner = _zer0netDb.getAddress(ownerHash);
+
+        /* Validate nametag owner. */
+        require(msg.sender == nametagOwner);
+
+        _;      // function code is inserted here
+    }
+
+    /**
      * THIS CONTRACT DOES NOT ACCEPT DIRECT ETHER
      */
     function () public payable {
@@ -275,7 +298,69 @@ contract Nametag is Owned {
         uint _respect
     ) public returns (bool success) {
         /* Set respect. */
-        return _setRespect(_peer, _respect);
+        return _setRespect(msg.sender, _peer, _respect);
+    }
+
+    /**
+     * Give Respect (To Another Peer by Relayer)
+     */
+    function giveRespect(
+        address _peer,
+        uint _respect,
+        uint _expires,
+        uint _nonce,
+        bytes _signature
+    ) external returns (bool success) {
+        /* Make sure the signature has not expired. */
+        if (block.number > _expires) {
+            revert('Oops! That signature has already EXPIRED.');
+        }
+
+        /* Calculate encoded data hash. */
+        bytes32 hash = keccak256(abi.encodePacked(
+            address(this),
+            _peer,
+            _respect,
+            _expires,
+            _nonce
+        ));
+
+        bytes32 sigHash = keccak256(abi.encodePacked(
+            '\x19Ethereum Signed Message:\n32', hash));
+
+        /* Retrieve the authorized signer. */
+        address signer =
+            _ecRecovery().recover(sigHash, _signature);
+
+        /* Set respect. */
+        return _setRespect(signer, _peer, _respect);
+    }
+
+    /**
+     * Show Respect (For Another Peer)
+     */
+    function showRespectFor(
+        address _peer
+    ) external view returns (uint respect) {
+        /* Show respect (value). */
+        return _getRespect(msg.sender, _peer);
+    }
+
+    /**
+     * Show Respect (Between Two Peers)
+     */
+    function showRespect(
+        address _owner,
+        address _peer
+    ) external view returns (
+        uint respect,
+        uint reciprocal
+    ) {
+        /* Retriieve respect (value). */
+        respect = _getRespect(_owner, _peer);
+
+        /* Retriieve respect (value). */
+        reciprocal = _getRespect(_peer, _owner);
     }
 
 
@@ -333,6 +418,24 @@ contract Nametag is Owned {
     }
 
     /**
+     * Get Respect
+     */
+    function _getRespect(
+        address _owner,
+        address _peer
+    ) private view returns (uint respect) {
+        /* Calculate the data id. */
+        bytes32 dataId = keccak256(abi.encodePacked(
+            _namespace, '.',
+            _owner,
+            '.respect.for.',
+            _peer
+        ));
+
+        /* Retrieve data from database. */
+        respect = _zer0netDb.getUint(dataId);
+    }
+    /**
      * Get Revision (Number)
      */
     function getRevision() public view returns (uint) {
@@ -363,23 +466,16 @@ contract Nametag is Owned {
     /**
      * Set (Nametag) Data
      *
-     * NOTE: Nametags are NOT permanent, and will become vacated after a
-     *       period of inactivity.
+     * NOTE: Nametags are NOT permanent, and WILL become vacated after an
+     *       extended period of inactivity.
      *
-     *       *** LIMIT OF ONE AUTHORIZED ACCOUNT PER NAMETAG ***
+     *       *** LIMIT OF ONE AUTHORIZED ACCOUNT / ADDRESS PER NAMETAG ***
      */
     function setData(
         bytes32 _nametagId,
         bytes32 _fieldId,
         bytes _data
-    ) external returns (bool success) {
-        /* Verify write access is only permitted to authorized accounts. */
-        require(_zer0netDb.getBool(keccak256(abi.encodePacked(
-            msg.sender,
-            '.has.auth.for.nametag.',
-            _nametagId
-        ))) == true);
-
+    ) external onlyNametagOwner(_nametagId) returns (bool success) {
         /* Set data. */
         return _setData(
             _nametagId,
@@ -421,14 +517,22 @@ contract Nametag is Owned {
         address signer =
             _ecRecovery().recover(sigHash, _signature);
 
+        /* Calculate owner hash. */
+        bytes32 ownerHash = keccak256(abi.encodePacked(
+            _namespace, '.',
+            _nametagId,
+            '.owner'
+        ));
+
+        /* Retrieve nametag owner. */
+        address nametagOwner = _zer0netDb.getAddress(ownerHash);
+
         /* Verify write access is only permitted to authorized accounts. */
         // NOTE: It is possible for "expired" nametags to de-authorized
         //       and re-authorized to a new user.
-        require(_zer0netDb.getBool(keccak256(abi.encodePacked(
-            signer,
-            '.has.auth.for.nametag.',
-            _nametagId
-        ))) == true);
+        if (signer != nametagOwner) {
+            revert('Oops! You are NOT authorized here.');
+        }
 
         /* Set data. */
         return _setData(
@@ -471,7 +575,7 @@ contract Nametag is Owned {
     /**
      * Set Permissions
      */
-    function setPermission(
+    function setPermissions(
         bytes32 _nametag,
         address _delegate,
         bytes _permissions
@@ -488,8 +592,8 @@ contract Nametag is Owned {
     /**
      * Set Permissions
      */
-    function setPermission(
-        bytes32 _nametag,
+    function setPermissions(
+        bytes32 _nametagId,
         address _owner,
         address _delegate,
         bytes _permissions,
@@ -505,7 +609,7 @@ contract Nametag is Owned {
         /* Calculate encoded data hash. */
         bytes32 hash = keccak256(abi.encodePacked(
             address(this),
-            _nametag,
+            _nametagId,
             _owner,
             _delegate,
             _permissions,
@@ -520,18 +624,26 @@ contract Nametag is Owned {
         address signer =
             _ecRecovery().recover(sigHash, _signature);
 
+        /* Calculate owner hash. */
+        bytes32 ownerHash = keccak256(abi.encodePacked(
+            _namespace, '.',
+            _nametagId,
+            '.owner'
+        ));
+
+        /* Retrieve nametag owner. */
+        address nametagOwner = _zer0netDb.getAddress(ownerHash);
+
         /* Verify write access is only permitted to authorized accounts. */
         // NOTE: It is possible for "expired" nametags to de-authorized
         //       and re-authorized to a new user.
-        require(_zer0netDb.getBool(keccak256(abi.encodePacked(
-            signer,
-            '.has.auth.for.nametag.',
-            _nametag
-        ))) == true);
+        if (signer != nametagOwner) {
+            revert('Oops! You are NOT authorized here.');
+        }
 
         /* Set permissions. */
         return _setPermissions(
-            _nametag,
+            _nametagId,
             _owner,
             _delegate,
             _permissions
@@ -613,6 +725,7 @@ contract Nametag is Owned {
      * Set Respect
      */
     function _setRespect(
+        address _owner,
         address _peer,
         uint _respect
     ) private returns (bool success) {
@@ -623,13 +736,13 @@ contract Nametag is Owned {
 
         /* Validate respect. */
         if (_respect > 5) {
-            revert('Oops! Your respect is OVER THE LIMIT.');
+            revert('Oops! Your respect is TOO MUCH.');
         }
 
         /* Calculate the data id. */
         bytes32 dataId = keccak256(abi.encodePacked(
             _namespace, '.',
-            msg.sender,
+            _owner,
             '.respect.for.',
             _peer
         ));
@@ -639,6 +752,7 @@ contract Nametag is Owned {
 
         /* Broadcast event. */
         emit Respect(
+            _owner,
             _peer,
             _respect
         );
