@@ -9,7 +9,7 @@ pragma solidity ^0.4.25;
  *
  *           Designed to support the needs of the growing Zeronet community.
  *
- * Version 19.3.20
+ * Version 19.3.21
  *
  * Web    : https://d14na.org
  * Email  : support@d14na.org
@@ -193,8 +193,10 @@ contract Nametag is Owned {
      */
     string private _namespace = 'nametag';
 
-    event NametagUpdate(
-        bytes32 indexed nametagId
+    event Update(
+        string indexed nametag,
+        string indexed field,
+        bytes data
     );
 
     event Permissions(
@@ -208,13 +210,6 @@ contract Nametag is Owned {
         address indexed peer,
         uint respect
     );
-
-    // TODO Add more "specific" events, while maintaing user privacy.
-
-    // event NametagUpdate(
-    //     bytes32 indexed nametagId,
-    //     bytes32 field
-    // );
 
     /***************************************************************************
      *
@@ -257,12 +252,12 @@ contract Nametag is Owned {
      * @dev Only allow access to "registered" nametag owner.
      */
     modifier onlyNametagOwner(
-        bytes32 _nametagId
+        string _nametag
     ) {
         /* Calculate owner hash. */
         bytes32 ownerHash = keccak256(abi.encodePacked(
             _namespace, '.',
-            _nametagId,
+            _nametag,
             '.owner'
         ));
 
@@ -376,14 +371,14 @@ contract Nametag is Owned {
      * Retrieves the value for the given nametag id and data field.
      */
     function getData(
-        bytes32 _nametagId,
-        bytes32 _fieldId
+        string _nametag,
+        string _field
     ) external view returns (bytes data) {
         /* Calculate the data id. */
         bytes32 dataId = keccak256(abi.encodePacked(
             _namespace, '.',
-            _nametagId, '.',
-            _fieldId
+            _nametag, '.',
+            _field
         ));
 
         /* Retrieve data. */
@@ -400,14 +395,14 @@ contract Nametag is Owned {
      * exposing the security of a more secure account.
      */
     function getPermissions(
-        bytes32 _nametagId,
+        string _nametag,
         address _owner,
         address _delegate
     ) external view returns (bytes permissions) {
         /* Set hash. */
         bytes32 dataId = keccak256(abi.encodePacked(
             _namespace, '.',
-            _nametagId, '.',
+            _nametag, '.',
             _owner, '.',
             _delegate,
             '.permissions'
@@ -472,14 +467,14 @@ contract Nametag is Owned {
      *       *** LIMIT OF ONE AUTHORIZED ACCOUNT / ADDRESS PER NAMETAG ***
      */
     function setData(
-        bytes32 _nametagId,
-        bytes32 _fieldId,
+        string _nametag,
+        string _field,
         bytes _data
-    ) external onlyNametagOwner(_nametagId) returns (bool success) {
+    ) external onlyNametagOwner(_nametag) returns (bool success) {
         /* Set data. */
         return _setData(
-            _nametagId,
-            _fieldId,
+            _nametag,
+            _field,
             _data
         );
     }
@@ -488,8 +483,8 @@ contract Nametag is Owned {
      * Set (Nametag) Data (by Relayer)
      */
     function setData(
-        bytes32 _nametagId,
-        bytes32 _fieldId,
+        string _nametag,
+        string _field,
         bytes _data,
         uint _expires,
         uint _nonce,
@@ -503,41 +498,22 @@ contract Nametag is Owned {
         /* Calculate encoded data hash. */
         bytes32 hash = keccak256(abi.encodePacked(
             address(this),
-            _nametagId,
-            _fieldId,
+            _nametag,
+            _field,
             _data,
             _expires,
             _nonce
         ));
 
-        bytes32 sigHash = keccak256(abi.encodePacked(
-            '\x19Ethereum Signed Message:\n32', hash));
-
-        /* Retrieve the authorized signer. */
-        address signer =
-            _ecRecovery().recover(sigHash, _signature);
-
-        /* Calculate owner hash. */
-        bytes32 ownerHash = keccak256(abi.encodePacked(
-            _namespace, '.',
-            _nametagId,
-            '.owner'
-        ));
-
-        /* Retrieve nametag owner. */
-        address nametagOwner = _zer0netDb.getAddress(ownerHash);
-
-        /* Verify write access is only permitted to authorized accounts. */
-        // NOTE: It is possible for "expired" nametags to de-authorized
-        //       and re-authorized to a new user.
-        if (signer != nametagOwner) {
-            revert('Oops! You are NOT authorized here.');
+        /* Validate signature. */
+        if (!_validateSignature(_nametag, hash, _signature)) {
+            revert('Oops! Your signature is INVALID.');
         }
 
         /* Set data. */
         return _setData(
-            _nametagId,
-            _fieldId,
+            _nametag,
+            _field,
             _data
         );
     }
@@ -551,8 +527,8 @@ contract Nametag is Owned {
      *      NOTE: Markdown will be the default format for definitions.
      */
     function _setData(
-        bytes32 _nametag,
-        bytes32 _field,
+        string _nametag,
+        string _field,
         bytes _data
     ) private returns (bool success) {
         /* Calculate the data id. */
@@ -566,7 +542,11 @@ contract Nametag is Owned {
         _zer0netDb.setBytes(dataId, _data);
 
         /* Broadcast event. */
-        emit NametagUpdate(dataId);
+        emit Update(
+            _nametag,
+            _field,
+            _data
+        );
 
         /* Return success. */
         return true;
@@ -576,7 +556,7 @@ contract Nametag is Owned {
      * Set Permissions
      */
     function setPermissions(
-        bytes32 _nametag,
+        string _nametag,
         address _delegate,
         bytes _permissions
     ) external returns (bool success) {
@@ -593,7 +573,7 @@ contract Nametag is Owned {
      * Set Permissions
      */
     function setPermissions(
-        bytes32 _nametagId,
+        string _nametag,
         address _owner,
         address _delegate,
         bytes _permissions,
@@ -609,7 +589,7 @@ contract Nametag is Owned {
         /* Calculate encoded data hash. */
         bytes32 hash = keccak256(abi.encodePacked(
             address(this),
-            _nametagId,
+            _nametag,
             _owner,
             _delegate,
             _permissions,
@@ -617,33 +597,14 @@ contract Nametag is Owned {
             _nonce
         ));
 
-        bytes32 sigHash = keccak256(abi.encodePacked(
-            '\x19Ethereum Signed Message:\n32', hash));
-
-        /* Retrieve the authorized signer. */
-        address signer =
-            _ecRecovery().recover(sigHash, _signature);
-
-        /* Calculate owner hash. */
-        bytes32 ownerHash = keccak256(abi.encodePacked(
-            _namespace, '.',
-            _nametagId,
-            '.owner'
-        ));
-
-        /* Retrieve nametag owner. */
-        address nametagOwner = _zer0netDb.getAddress(ownerHash);
-
-        /* Verify write access is only permitted to authorized accounts. */
-        // NOTE: It is possible for "expired" nametags to de-authorized
-        //       and re-authorized to a new user.
-        if (signer != nametagOwner) {
-            revert('Oops! You are NOT authorized here.');
+        /* Validate signature. */
+        if (!_validateSignature(_nametag, hash, _signature)) {
+            revert('Oops! Your signature is INVALID.');
         }
 
         /* Set permissions. */
         return _setPermissions(
-            _nametagId,
+            _nametag,
             _owner,
             _delegate,
             _permissions
@@ -697,7 +658,7 @@ contract Nametag is Owned {
      * NOTE: Permissions WILL NOT be transferred between owners.
      */
     function _setPermissions(
-        bytes32 _nametag,
+        string _nametag,
         address _owner,
         address _delegate,
         bytes _permissions
@@ -858,6 +819,36 @@ contract Nametag is Owned {
      * UTILITIES
      *
      */
+
+    /**
+     * Validate Signature
+     */
+    function _validateSignature(
+        string _nametag,
+        bytes32 _sigHash,
+        bytes _signature
+    ) private view returns (bool authorized) {
+        /* Calculate owner hash. */
+        bytes32 ownerHash = keccak256(abi.encodePacked(
+            _namespace, '.',
+            _nametag,
+            '.owner'
+        ));
+
+        /* Retrieve nametag owner. */
+        address nametagOwner = _zer0netDb.getAddress(ownerHash);
+
+        /* Calculate signature hash. */
+        bytes32 sigHash = keccak256(abi.encodePacked(
+            '\x19Ethereum Signed Message:\n32', _sigHash));
+
+        /* Retrieve the authorized signer. */
+        address signer =
+            _ecRecovery().recover(sigHash, _signature);
+
+        /* Validate signer. */
+        authorized = (signer == nametagOwner);
+    }
 
     /**
      * Is (Owner) Contract
